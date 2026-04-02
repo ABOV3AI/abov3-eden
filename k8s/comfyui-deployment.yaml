@@ -1,0 +1,163 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: comfyui
+  namespace: abov3-prod
+  labels:
+    app: comfyui
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8188
+      targetPort: 8188
+      protocol: TCP
+      name: http
+  selector:
+    app: comfyui
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: comfyui-models
+  namespace: abov3-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi  # For Stable Diffusion models
+  storageClassName: do-block-storage
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: comfyui-output
+  namespace: abov3-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi  # For generated images
+  storageClassName: do-block-storage
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: comfyui-install
+  namespace: abov3-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi  # For ComfyUI installation
+  storageClassName: do-block-storage
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: comfyui
+  namespace: abov3-prod
+  labels:
+    app: comfyui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: comfyui
+  template:
+    metadata:
+      labels:
+        app: comfyui
+    spec:
+      initContainers:
+        - name: comfyui-installer
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              echo "Installing git..."
+              apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1
+
+              cd /data
+              if [ ! -f "/data/main.py" ]; then
+                echo "Cloning ComfyUI to persistent storage..."
+                git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git temp
+                mv temp/* .
+                rm -rf temp
+                echo "Installing Python requirements..."
+                pip install --no-cache-dir -q -r requirements.txt
+                echo "ComfyUI installation complete!"
+              else
+                echo "ComfyUI already installed in persistent storage"
+              fi
+          volumeMounts:
+            - name: comfyui-install
+              mountPath: /data
+      containers:
+        - name: comfyui
+          image: python:3.11-slim
+          workingDir: /data
+          ports:
+            - containerPort: 8188
+              name: http
+              protocol: TCP
+
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              # Ensure dependencies are installed (in case of container restart)
+              pip install --no-cache-dir -q -r requirements.txt
+              # Start ComfyUI
+              python main.py --listen 0.0.0.0 --port 8188 --cpu
+
+          volumeMounts:
+            - name: comfyui-install
+              mountPath: /data
+            - name: models
+              mountPath: /data/models
+            - name: output
+              mountPath: /data/output
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+
+          livenessProbe:
+            httpGet:
+              path: /system_stats
+              port: 8188
+            initialDelaySeconds: 300  # 5 minutes for pip install + startup
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /system_stats
+              port: 8188
+            initialDelaySeconds: 300  # 5 minutes for pip install + startup
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+      volumes:
+        - name: comfyui-install
+          persistentVolumeClaim:
+            claimName: comfyui-install
+        - name: models
+          persistentVolumeClaim:
+            claimName: comfyui-models
+        - name: output
+          persistentVolumeClaim:
+            claimName: comfyui-output

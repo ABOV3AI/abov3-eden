@@ -1,0 +1,47 @@
+{
+  "server": {
+    "port": 3100,
+    "host": "127.0.0.1"
+  },
+  "workspace": {
+    "roots": [
+      "C:/Users/fajar/Documents",
+      "C:/Users/fajar/Projects",
+      "D:/Projects"
+    ],
+    "description": "List of directories where Eden will search for project folders. When Exodus sends a path like 'MyProject/file.py', Eden searches these roots to find which one contains 'MyProject'."
+  },
+  "cors": {
+    "enabled": true,
+    "origins": [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3001",
+      "https://exodus.abov3.com"
+    ]
+  },
+  "security": {
+    "allowedPaths": [],
+    "allowAllPaths": true,
+    "blockedCommands": [],
+    "maxFileSize": 104857600,
+    "commandTimeout": 30000
+  },
+  "database": {
+    "sqlite": {
+      "enabled": true
+    },
+    "postgres": {
+      "enabled": false,
+      "connectionString": ""
+    },
+    "mysql": {
+      "enabled": false,
+      "connectionString": ""
+    }
+  },
+  "logging": {
+    "level": "info"
+  }
+}

@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eden-config
+  namespace: abov3-prod
+data:
+  config.json: |
+    {
+      "server": {
+        "port": 3100,
+        "host": "0.0.0.0"
+      },
+      "workspace": {
+        "roots": [],
+        "description": "Workspace roots disabled in Kubernetes deployment. Training data passed via API."
+      },
+      "cors": {
+        "enabled": true,
+        "origins": [
+          "https://exodus.abov3.ai",
+          "http://localhost:3000"
+        ]
+      },
+      "comfyui": {
+        "enabled": true,
+        "host": "comfyui.abov3-prod.svc.cluster.local",
+        "port": 8188,
+        "autoStart": false,
+        "models": {
+          "checkpointDefault": "sd_xl_base_1.0.safetensors"
+        }
+      },
+      "security": {
+        "allowedPaths": [],
+        "allowAllPaths": false,
+        "blockedCommands": [],
+        "maxFileSize": 104857600,
+        "commandTimeout": 30000
+      },
+      "database": {
+        "sqlite": {
+          "enabled": true
+        },
+        "postgres": {
+          "enabled": false,
+          "connectionString": ""
+        },
+        "mysql": {
+          "enabled": false,
+          "connectionString": ""
+        }
+      },
+      "logging": {
+        "level": "info"
+      }
+    }

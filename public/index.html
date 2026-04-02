@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ABOV3 Eden - MCP Server Dashboard</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="logo">
+        <img src="/logo.png" alt="ABOV3" class="logo-image" style="height: 32px; margin-right: 12px;">
+        <div class="logo-text">
+          <span class="logo-title">Eden</span>
+          <span class="logo-subtitle">Local MCP Server</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="#overview" class="nav-link active" data-section="overview">Overview</a>
+        <a href="#tools" class="nav-link" data-section="tools">Tools</a>
+        <a href="#manage" class="nav-link" data-section="manage">Manage</a>
+        <a href="#logs" class="nav-link" data-section="logs">Logs</a>
+        <a href="#config" class="nav-link" data-section="config">Config</a>
+      </nav>
+      <div class="header-status">
+        <span class="status-indicator" id="serverStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">Connecting...</span>
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Overview Section -->
+    <section id="overview" class="section active">
+      <!-- Stats Cards -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value" id="totalTools">0</span>
+            <span class="stat-label">Total Tools</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value" id="totalRequests">0</span>
+            <span class="stat-label">Total Requests</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon purple">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value" id="uptime">0s</span>
+            <span class="stat-label">Uptime</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-value" id="toolExecutions">0</span>
+            <span class="stat-label">Tool Executions</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ComfyUI Status Card -->
+      <div class="card comfyui-card" id="comfyuiCard">
+        <div class="card-header">
+          <h2 class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle;">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            ComfyUI (AI Image Generation)
+          </h2>
+          <span class="status-badge" id="comfyuiStatusBadge">Checking...</span>
+        </div>
+        <div class="card-content">
+          <div class="comfyui-info">
+            <div class="comfyui-status-row">
+              <span class="info-label">Status</span>
+              <span class="info-value" id="comfyuiStatus">-</span>
+            </div>
+            <div class="comfyui-status-row">
+              <span class="info-label">URL</span>
+              <span class="info-value mono" id="comfyuiUrl">-</span>
+            </div>
+            <div class="comfyui-status-row" id="comfyuiUptimeRow" style="display: none;">
+              <span class="info-label">Uptime</span>
+              <span class="info-value" id="comfyuiUptime">-</span>
+            </div>
+            <div class="comfyui-status-row" id="comfyuiErrorRow" style="display: none;">
+              <span class="info-label">Error</span>
+              <span class="info-value error" id="comfyuiError">-</span>
+            </div>
+          </div>
+          <div class="comfyui-actions">
+            <button class="btn btn-sm btn-primary" id="comfyuiStartBtn" disabled>Start</button>
+            <button class="btn btn-sm btn-secondary" id="comfyuiStopBtn" disabled>Stop</button>
+            <button class="btn btn-sm btn-secondary" id="comfyuiRestartBtn" disabled>Restart</button>
+          </div>
+          <!-- Install instructions (shown when not installed) -->
+          <div class="comfyui-install-notice" id="comfyuiInstallNotice" style="display: none;">
+            <div class="install-notice-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>ComfyUI Not Installed</span>
+            </div>
+            <p>To enable AI image generation, run the setup script:</p>
+            <code class="install-command">setup-comfyui.bat</code>
+            <p class="install-note">This will download and configure ComfyUI (~5GB). Takes 10-30 minutes.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- System Info & Activity -->
+      <div class="dashboard-grid">
+        <!-- System Information -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">System Information</h2>
+            <span class="card-badge">Live</span>
+          </div>
+          <div class="card-content">
+            <div class="info-grid" id="systemInfo">
+              <div class="info-item">
+                <span class="info-label">Platform</span>
+                <span class="info-value">-</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Node.js</span>
+                <span class="info-value">-</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Memory</span>
+                <span class="info-value">-</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">CPU Cores</span>
+                <span class="info-value">-</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Working Dir</span>
+                <span class="info-value mono">-</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Server Port</span>
+                <span class="info-value mono">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Recent Activity</h2>
+            <button class="card-action" id="clearActivity">Clear</button>
+          </div>
+          <div class="card-content">
+            <div class="activity-list" id="activityList">
+              <div class="activity-empty">No recent activity</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool Categories -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Tool Categories</h2>
+        </div>
+        <div class="card-content">
+          <div class="category-grid" id="categoryGrid">
+            <!-- Populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tools Section -->
+    <section id="tools" class="section">
+      <div class="section-header">
+        <h1 class="section-title">Available Tools</h1>
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input type="text" class="search-input" id="toolSearch" placeholder="Search tools...">
+        </div>
+      </div>
+      <div class="tools-grid" id="toolsGrid">
+        <!-- Populated by JavaScript -->
+      </div>
+    </section>
+
+    <!-- Manage Section -->
+    <section id="manage" class="section">
+      <div class="section-header">
+        <h1 class="section-title">Tool Management</h1>
+        <button class="btn btn-primary" id="addCustomToolBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          Add Custom Tool
+        </button>
+      </div>
+
+      <!-- Tool Toggle List -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Enable/Disable Tools</h2>
+          <div class="card-actions">
+            <button class="btn btn-secondary btn-sm" id="enableAllTools">Enable All</button>
+            <button class="btn btn-secondary btn-sm" id="disableAllTools">Disable All</button>
+          </div>
+        </div>
+        <div class="card-content">
+          <!-- Tool Search Filter -->
+          <div class="tool-toggle-search">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input type="text" class="search-input" id="toolToggleSearch" placeholder="Search tools...">
+          </div>
+          <div class="tool-toggle-list" id="toolToggleList">
+            <!-- Populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Tools -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Custom Tools</h2>
+        </div>
+        <div class="card-content">
+          <!-- Custom Tools Search Filter -->
+          <div class="tool-toggle-search">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input type="text" class="search-input" id="customToolsSearch" placeholder="Search custom tools...">
+          </div>
+          <div class="custom-tools-list" id="customToolsList">
+            <div class="empty-state">No custom tools added yet</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Logs Section -->
+    <section id="logs" class="section">
+      <div class="section-header">
+        <h1 class="section-title">Server Logs</h1>
+        <div class="logs-actions">
+          <select id="logLevel" class="log-filter">
+            <option value="all">All Levels</option>
+            <option value="debug">Debug</option>
+            <option value="info">Info</option>
+            <option value="warn">Warning</option>
+            <option value="error">Error</option>
+          </select>
+          <button class="btn btn-secondary" id="clearLogs">Clear Logs</button>
+          <button class="btn btn-primary" id="downloadLogs">Download</button>
+        </div>
+      </div>
+      <div class="logs-container">
+        <div class="logs-list" id="logsList">
+          <div class="log-entry info">
+            <span class="log-time">--:--:--</span>
+            <span class="log-level">INFO</span>
+            <span class="log-message">Waiting for logs...</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Config Section -->
+    <section id="config" class="section">
+      <div class="section-header">
+        <h1 class="section-title">Configuration</h1>
+      </div>
+      <div class="config-grid">
+        <!-- Server Config -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Server Settings</h2>
+          </div>
+          <div class="card-content">
+            <div class="config-form" id="serverConfig">
+              <!-- Populated by JavaScript -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Security Config -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Security Settings</h2>
+          </div>
+          <div class="card-content">
+            <div class="config-form" id="securityConfig">
+              <!-- Populated by JavaScript -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Connection Info -->
+        <div class="card full-width">
+          <div class="card-header">
+            <h2 class="card-title">Connection Information</h2>
+          </div>
+          <div class="card-content">
+            <div class="connection-info">
+              <div class="connection-item">
+                <span class="connection-label">MCP Endpoint</span>
+                <div class="connection-value">
+                  <code id="mcpEndpoint">http://localhost:3100/mcp</code>
+                  <button class="copy-btn" data-copy="mcpEndpoint" title="Copy to clipboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="connection-item">
+                <span class="connection-label">Health Check</span>
+                <div class="connection-value">
+                  <code id="healthEndpoint">http://localhost:3100/health</code>
+                  <button class="copy-btn" data-copy="healthEndpoint" title="Copy to clipboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="connection-instructions">
+              <h3>Connect from ABOV3 Exodus</h3>
+              <ol>
+                <li>Open ABOV3 Exodus</li>
+                <li>Go to <strong>Settings → Tools → MCP Servers</strong></li>
+                <li>Click <strong>Add Server</strong></li>
+                <li>Enter the MCP Endpoint URL above</li>
+                <li>Enable the server</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Tool Detail Modal -->
+  <div class="modal" id="toolModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalToolName">Tool Name</h2>
+        <button class="modal-close" id="closeModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-description" id="modalToolDescription"></p>
+        <div class="modal-section">
+          <h3>Input Schema</h3>
+          <pre class="code-block" id="modalToolSchema"></pre>
+        </div>
+        <div class="modal-section">
+          <h3>Test Tool</h3>
+          <div class="test-tool-form">
+            <textarea class="test-input" id="testToolInput" placeholder='{"arg1": "value1"}'></textarea>
+            <button class="btn btn-primary" id="executeTestTool">Execute</button>
+          </div>
+          <div class="test-result" id="testToolResult"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Custom Tool Modal -->
+  <div class="modal" id="customToolModal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2 class="modal-title">Add Custom Tool</h2>
+        <button class="modal-close" id="closeCustomToolModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="customToolForm" class="custom-tool-form">
+          <div class="form-group">
+            <label for="customToolName">Tool Name *</label>
+            <input type="text" id="customToolName" placeholder="my_custom_tool" required pattern="[a-z][a-z0-9_]*">
+            <span class="form-hint">Lowercase letters, numbers, and underscores only</span>
+          </div>
+          <div class="form-group">
+            <label for="customToolDescription">Description *</label>
+            <textarea id="customToolDescription" placeholder="Describe what this tool does..." required></textarea>
+          </div>
+          <div class="form-group">
+            <label for="customToolType">Tool Type *</label>
+            <select id="customToolType" required>
+              <option value="shell">Shell Command</option>
+              <option value="http">HTTP Request</option>
+              <option value="script">Custom Script</option>
+            </select>
+          </div>
+          <div class="form-group" id="shellCommandGroup">
+            <label for="customToolCommand">Shell Command *</label>
+            <input type="text" id="customToolCommand" placeholder="echo 'Hello World'">
+            <span class="form-hint">Use {{arg_name}} for parameters</span>
+          </div>
+          <div class="form-group" id="httpGroup" style="display: none;">
+            <label for="customToolUrl">HTTP URL *</label>
+            <input type="text" id="customToolUrl" placeholder="https://api.example.com/endpoint">
+            <label for="customToolMethod">HTTP Method</label>
+            <select id="customToolMethod">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+          </div>
+          <div class="form-group" id="scriptGroup" style="display: none;">
+            <label for="customToolScript">Script Code *</label>
+            <textarea id="customToolScript" placeholder="// JavaScript code here&#10;// Access args via: args.param_name&#10;return result;" style="font-family: monospace; min-height: 150px;"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="customToolParams">Parameters (JSON Schema)</label>
+            <textarea id="customToolParams" placeholder='{"param1": {"type": "string", "description": "First parameter"}}' style="font-family: monospace;"></textarea>
+            <span class="form-hint">Define input parameters as JSON schema</span>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="cancelCustomTool">Cancel</button>
+            <button type="submit" class="btn btn-primary">Add Tool</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
