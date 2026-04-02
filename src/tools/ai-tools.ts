@@ -803,16 +803,16 @@ export const aiTools: Tool[] = [
         },
         width: {
           type: 'number',
-          description: 'Image width in pixels. Default: 1024',
+          description: 'Image width in pixels. Default: 512 (use 512-768 for reliability)',
         },
         height: {
           type: 'number',
-          description: 'Image height in pixels. Default: 1024',
+          description: 'Image height in pixels. Default: 512 (use 512-768 for reliability)',
         },
         model: {
           type: 'string',
           enum: ['flux', 'turbo', 'flux-realism', 'flux-anime', 'flux-3d'],
-          description: 'Model to use. flux=high quality (default), turbo=faster, flux-realism=photorealistic, flux-anime=anime style, flux-3d=3D render',
+          description: 'Optional model. Leave empty for default (most reliable). Options: flux=high quality, turbo=faster, flux-realism=photorealistic, flux-anime=anime style, flux-3d=3D render',
         },
         seed: {
           type: 'number',
@@ -829,18 +829,23 @@ export const aiTools: Tool[] = [
       },
       required: ['prompt'],
     },
-    handler: async ({ prompt, width = 1024, height = 1024, model = 'flux', seed, enhance = true, save_to }) => {
+    handler: async ({ prompt, width = 512, height = 512, model, seed, enhance = false, save_to }) => {
       try {
         // Build Pollinations API URL
+        // Use smaller defaults (512x512) for reliability - Pollinations often 502s on 1024x1024
         const encodedPrompt = encodeURIComponent(prompt);
         const actualSeed = seed ?? Math.floor(Math.random() * 2147483647);
 
         const params = new URLSearchParams();
-        params.set('model', model);
+        // Only set model if explicitly specified - default model is most reliable
+        if (model) {
+          params.set('model', model);
+        }
         params.set('width', String(width));
         params.set('height', String(height));
         params.set('seed', String(actualSeed));
         params.set('nologo', 'true');
+        // Disable enhance by default as it can cause timeouts
         if (enhance) {
           params.set('enhance', 'true');
         }
@@ -861,11 +866,12 @@ export const aiTools: Tool[] = [
         // Return markdown with image URL - this renders directly in chat!
         // The URL triggers image generation on-demand when loaded
         const shortPrompt = prompt.slice(0, 80) + (prompt.length > 80 ? '...' : '');
+        const modelDisplay = model || 'default';
         return {
           content: [
             {
               type: 'text',
-              text: `**Generated Image** (${model}, ${width}x${height})\n\n![${shortPrompt}](${pollinationsUrl})\n\n*Prompt: "${prompt}"*`,
+              text: `**Generated Image** (${modelDisplay}, ${width}x${height})\n\n![${shortPrompt}](${pollinationsUrl})\n\n*Prompt: "${prompt}"*`,
             },
           ],
         };
