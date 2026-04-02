@@ -853,25 +853,63 @@ export const aiTools: Tool[] = [
         const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?${params.toString()}`;
         console.log(`[Eden] Generating image via Pollinations: ${pollinationsUrl}`);
 
-        // Optionally save to file (need to fetch first)
-        if (save_to) {
-          const imageResponse = await fetch(pollinationsUrl);
-          if (imageResponse.ok) {
-            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-            const savePath = path.resolve(save_to);
-            await fs.writeFile(savePath, imageBuffer);
+        // Fetch the image with retries - Pollinations can be unreliable
+        let imageBuffer: Buffer | null = null;
+        let lastError = '';
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`[Eden] Fetching image, attempt ${attempt}/3...`);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+            const imageResponse = await fetch(pollinationsUrl, { signal: controller.signal });
+            clearTimeout(timeout);
+
+            if (imageResponse.ok) {
+              imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+              console.log(`[Eden] Image fetched successfully: ${imageBuffer.length} bytes`);
+              break;
+            } else {
+              lastError = `HTTP ${imageResponse.status}: ${imageResponse.statusText}`;
+              console.log(`[Eden] Attempt ${attempt} failed: ${lastError}`);
+            }
+          } catch (fetchError: any) {
+            lastError = fetchError.message || 'Fetch failed';
+            console.log(`[Eden] Attempt ${attempt} error: ${lastError}`);
+          }
+
+          // Wait before retry
+          if (attempt < 3) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
 
-        // Return markdown with image URL - this renders directly in chat!
-        // The URL triggers image generation on-demand when loaded
-        const shortPrompt = prompt.slice(0, 80) + (prompt.length > 80 ? '...' : '');
+        if (!imageBuffer) {
+          return { error: `Failed to generate image after 3 attempts: ${lastError}. Pollinations.ai may be experiencing high load. Try again with a simpler prompt.` };
+        }
+
+        // Save to file if requested
+        if (save_to) {
+          const savePath = path.resolve(save_to);
+          await fs.writeFile(savePath, imageBuffer);
+          console.log(`[Eden] Image saved to: ${savePath}`);
+        }
+
+        // Return the image as base64 - this renders reliably in chat!
+        const base64Image = imageBuffer.toString('base64');
         const modelDisplay = model || 'default';
+
         return {
           content: [
             {
               type: 'text',
-              text: `**Generated Image** (${modelDisplay}, ${width}x${height})\n\n![${shortPrompt}](${pollinationsUrl})\n\n*Prompt: "${prompt}"*`,
+              text: `**Generated Image** (${modelDisplay}, ${width}x${height})\n*Prompt: "${prompt}"*`,
+            },
+            {
+              type: 'image',
+              data: base64Image,
+              mimeType: 'image/jpeg',
             },
           ],
         };
