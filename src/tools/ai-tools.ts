@@ -790,10 +790,10 @@ export const aiTools: Tool[] = [
     },
   },
 
-  // === AI IMAGE GENERATION (Pollinations.ai - Free, No API Key Required) ===
+  // === AI IMAGE GENERATION (Stable Horde - Free, Community-Powered) ===
   {
     name: 'ai_image_generate',
-    description: 'Generate an image from a text prompt using Pollinations.ai (free, no API key required). Uses Stable Diffusion models via cloud API.',
+    description: 'Generate an image from a text prompt using Stable Horde (free, community-powered). Uses Stable Diffusion models.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -801,26 +801,21 @@ export const aiTools: Tool[] = [
           type: 'string',
           description: 'Text description of the image to generate',
         },
+        negative_prompt: {
+          type: 'string',
+          description: 'What to avoid in the image. Default: "blurry, bad quality, distorted"',
+        },
         width: {
           type: 'number',
-          description: 'Image width in pixels. Default: 512 (use 512-768 for reliability)',
+          description: 'Image width in pixels (must be multiple of 64). Default: 512',
         },
         height: {
           type: 'number',
-          description: 'Image height in pixels. Default: 512 (use 512-768 for reliability)',
+          description: 'Image height in pixels (must be multiple of 64). Default: 512',
         },
-        model: {
-          type: 'string',
-          enum: ['flux', 'turbo', 'flux-realism', 'flux-anime', 'flux-3d'],
-          description: 'Optional model. Leave empty for default (most reliable). Options: flux=high quality, turbo=faster, flux-realism=photorealistic, flux-anime=anime style, flux-3d=3D render',
-        },
-        seed: {
+        steps: {
           type: 'number',
-          description: 'Random seed for reproducibility. Default: random',
-        },
-        enhance: {
-          type: 'boolean',
-          description: 'Enhance prompt with AI for better results. Default: true',
+          description: 'Number of inference steps (10-50). Default: 25',
         },
         save_to: {
           type: 'string',
@@ -829,65 +824,93 @@ export const aiTools: Tool[] = [
       },
       required: ['prompt'],
     },
-    handler: async ({ prompt, width = 512, height = 512, model, seed, enhance = false, save_to }) => {
+    handler: async ({ prompt, negative_prompt = 'blurry, bad quality, distorted, deformed', width = 512, height = 512, steps = 25, save_to }) => {
       try {
-        // Build Pollinations API URL
-        // Use smaller defaults (512x512) for reliability - Pollinations often 502s on 1024x1024
-        const encodedPrompt = encodeURIComponent(prompt);
-        const actualSeed = seed ?? Math.floor(Math.random() * 2147483647);
+        console.log(`[Eden] Generating image via Stable Horde: "${prompt}"`);
 
-        const params = new URLSearchParams();
-        // Only set model if explicitly specified - default model is most reliable
-        if (model) {
-          params.set('model', model);
+        // Round dimensions to nearest 64
+        const w = Math.round(width / 64) * 64;
+        const h = Math.round(height / 64) * 64;
+
+        // Submit generation request to Stable Horde
+        const submitResponse = await fetch('https://stablehorde.net/api/v2/generate/async', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': '0000000000', // Anonymous API key (slower but free)
+          },
+          body: JSON.stringify({
+            prompt: prompt + (negative_prompt ? ` ### ${negative_prompt}` : ''),
+            params: {
+              width: w,
+              height: h,
+              steps: Math.min(Math.max(steps, 10), 50),
+              sampler_name: 'k_euler_a',
+              cfg_scale: 7,
+              karras: true,
+              n: 1,
+            },
+            nsfw: false,
+            censor_nsfw: true,
+            trusted_workers: false,
+            models: ['stable_diffusion'],
+            r2: true,
+          }),
+        });
+
+        if (!submitResponse.ok) {
+          const errorText = await submitResponse.text();
+          return { error: `Failed to submit image request: ${submitResponse.status} - ${errorText}` };
         }
-        params.set('width', String(width));
-        params.set('height', String(height));
-        params.set('seed', String(actualSeed));
-        params.set('nologo', 'true');
-        // Disable enhance by default as it can cause timeouts
-        if (enhance) {
-          params.set('enhance', 'true');
-        }
 
-        const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?${params.toString()}`;
-        console.log(`[Eden] Generating image via Pollinations: ${pollinationsUrl}`);
+        const submitData = await submitResponse.json();
+        const jobId = submitData.id;
+        console.log(`[Eden] Stable Horde job submitted: ${jobId}`);
 
-        // Fetch the image with retries - Pollinations can be unreliable
-        let imageBuffer: Buffer | null = null;
-        let lastError = '';
+        // Poll for completion (max 3 minutes)
+        const maxWaitTime = 180000;
+        const startTime = Date.now();
+        let imageUrl: string | null = null;
 
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            console.log(`[Eden] Fetching image, attempt ${attempt}/3...`);
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+        while (Date.now() - startTime < maxWaitTime) {
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3s between polls
 
-            const imageResponse = await fetch(pollinationsUrl, { signal: controller.signal });
-            clearTimeout(timeout);
+          const checkResponse = await fetch(`https://stablehorde.net/api/v2/generate/check/${jobId}`);
+          if (!checkResponse.ok) continue;
 
-            if (imageResponse.ok) {
-              imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-              console.log(`[Eden] Image fetched successfully: ${imageBuffer.length} bytes`);
-              break;
-            } else {
-              lastError = `HTTP ${imageResponse.status}: ${imageResponse.statusText}`;
-              console.log(`[Eden] Attempt ${attempt} failed: ${lastError}`);
+          const checkData = await checkResponse.json();
+          console.log(`[Eden] Job status: done=${checkData.done}, wait_time=${checkData.wait_time}s, queue=${checkData.queue_position}`);
+
+          if (checkData.done) {
+            // Get the final result
+            const statusResponse = await fetch(`https://stablehorde.net/api/v2/generate/status/${jobId}`);
+            if (statusResponse.ok) {
+              const statusData = await statusResponse.json();
+              if (statusData.generations && statusData.generations.length > 0) {
+                imageUrl = statusData.generations[0].img;
+                break;
+              }
             }
-          } catch (fetchError: any) {
-            lastError = fetchError.message || 'Fetch failed';
-            console.log(`[Eden] Attempt ${attempt} error: ${lastError}`);
           }
 
-          // Wait before retry
-          if (attempt < 3) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
+          if (checkData.faulted) {
+            return { error: 'Image generation failed on server. Please try again.' };
           }
         }
 
-        if (!imageBuffer) {
-          return { error: `Failed to generate image after 3 attempts: ${lastError}. Pollinations.ai may be experiencing high load. Try again with a simpler prompt.` };
+        if (!imageUrl) {
+          return { error: 'Image generation timed out after 3 minutes. The service may be busy. Try again later.' };
         }
+
+        // Fetch the actual image
+        console.log(`[Eden] Fetching generated image...`);
+        const imageResponse = await fetch(imageUrl);
+        if (!imageResponse.ok) {
+          return { error: `Failed to fetch generated image: ${imageResponse.status}` };
+        }
+
+        const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+        console.log(`[Eden] Image fetched: ${imageBuffer.length} bytes`);
 
         // Save to file if requested
         if (save_to) {
@@ -896,20 +919,19 @@ export const aiTools: Tool[] = [
           console.log(`[Eden] Image saved to: ${savePath}`);
         }
 
-        // Return the image as base64 - this renders reliably in chat!
+        // Return the image as base64
         const base64Image = imageBuffer.toString('base64');
-        const modelDisplay = model || 'default';
 
         return {
           content: [
             {
               type: 'text',
-              text: `**Generated Image** (${modelDisplay}, ${width}x${height})\n*Prompt: "${prompt}"*`,
+              text: `**Generated Image** (Stable Diffusion, ${w}x${h})\n*Prompt: "${prompt}"*`,
             },
             {
               type: 'image',
               data: base64Image,
-              mimeType: 'image/jpeg',
+              mimeType: 'image/webp',
             },
           ],
         };
