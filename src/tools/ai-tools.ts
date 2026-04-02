@@ -912,21 +912,31 @@ export const aiTools: Tool[] = [
         const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
         console.log(`[Eden] Image fetched: ${imageBuffer.length} bytes`);
 
-        // Save to file if requested
-        if (save_to) {
-          const savePath = path.resolve(save_to);
-          await fs.writeFile(savePath, imageBuffer);
-          console.log(`[Eden] Image saved to: ${savePath}`);
-        }
-
         // Return the image as base64
         const base64Image = imageBuffer.toString('base64');
+
+        // Try to save to file if requested (non-fatal if it fails)
+        let saveMessage = '';
+        if (save_to) {
+          try {
+            const savePath = path.resolve(save_to);
+            // Ensure directory exists
+            const saveDir = path.dirname(savePath);
+            await fs.mkdir(saveDir, { recursive: true });
+            await fs.writeFile(savePath, imageBuffer);
+            saveMessage = `\n*Saved to: ${savePath}*`;
+            console.log(`[Eden] Image saved to: ${savePath}`);
+          } catch (saveError: any) {
+            console.log(`[Eden] Warning: Could not save image: ${saveError.message}`);
+            saveMessage = `\n*Note: Could not save to file (${saveError.message})*`;
+          }
+        }
 
         return {
           content: [
             {
               type: 'text',
-              text: `**Generated Image** (Stable Diffusion, ${w}x${h})\n*Prompt: "${prompt}"*`,
+              text: `**Generated Image** (Stable Diffusion, ${w}x${h})\n*Prompt: "${prompt}"*${saveMessage}`,
             },
             {
               type: 'image',
